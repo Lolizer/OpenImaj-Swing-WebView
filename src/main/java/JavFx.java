@@ -155,6 +155,7 @@ public class JavFx {
         final Checkbox ck = new Checkbox("Draw the facial rectangles within the window");
         final Checkbox eigenCheck = new Checkbox("Eigenfaces recognition");
         final Checkbox AFRCheck = new Checkbox("AnnotatorFaceRecogniser KNN");
+        final Checkbox fisherCheck = new Checkbox("Fisherfaces recognition");
 
         final JTextField threshold = new JTextField(3);
         threshold.setToolTipText("Threshold for EigenFaces and FisherFaces");
@@ -370,6 +371,7 @@ public class JavFx {
             public void itemStateChanged(ItemEvent e) {
                 method = 1;
                 AFRCheck.setState(false);
+                fisherCheck.setState(false);
                 if(eigenCheck.getState() == false) method = 0;
             }
         });
@@ -379,7 +381,18 @@ public class JavFx {
             public void itemStateChanged(ItemEvent e) {
                 method = 2;
                 eigenCheck.setState(false);
+                fisherCheck.setState(false);
                 if(AFRCheck.getState() == false) method = 0;
+            }
+        });
+
+        fisherCheck.addItemListener(new ItemListener() { //does the same as previous one
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                method = 3;
+                eigenCheck.setState(false);
+                AFRCheck.setState(false);
+                if(fisherCheck.getState() == false) method = 0;
             }
         });
 
@@ -405,6 +418,7 @@ public class JavFx {
             settingPane.add(ck);
             settingPane.add(eigenCheck);
             settingPane.add(AFRCheck);
+            settingPane.add(fisherCheck);
 
             JOptionPane.showMessageDialog(null, settingPane,"Settings",JOptionPane.OK_OPTION);
             if(threshold.getText().isEmpty()) {maxVecVal = 21; return;}
@@ -671,7 +685,7 @@ public class JavFx {
 
             int nTraining = Math.round(amnt) - 2;
 
-            if(method == 1) {
+            if(method == 1 || method == 3) {
                 try {
                     while (count < amnt) {
                         if (faces != null)
@@ -699,7 +713,7 @@ public class JavFx {
                     System.exit(2);
                 }
 
-                if (!buff.isEmpty())
+                if (!buff.isEmpty() && method == 1)
                     try {
                         features = new HashMap<String, DoubleFV[]>();
                         int nEigenvectors = 1000;
@@ -802,6 +816,11 @@ public class JavFx {
                     e.printStackTrace();
                 }
             }
+
+            if(method == 3){
+
+            }
+
             return 0;
         }
     }
