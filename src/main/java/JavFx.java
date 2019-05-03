@@ -36,7 +36,9 @@ import org.openimaj.image.ImageUtilities;
 import org.openimaj.image.MBFImage;
 import org.openimaj.image.colour.Transforms;
 import org.openimaj.image.model.EigenImages;
+import org.openimaj.image.processing.face.alignment.FaceAligner;
 import org.openimaj.image.processing.face.alignment.IdentityAligner;
+import org.openimaj.image.processing.face.alignment.ScalingAligner;
 import org.openimaj.image.processing.face.detection.DetectedFace;
 import org.openimaj.image.processing.face.detection.FaceDetector;
 import org.openimaj.image.processing.face.detection.HaarCascadeDetector;
@@ -47,7 +49,9 @@ import org.openimaj.image.processing.face.feature.LocalLBPHistogram;
 import org.openimaj.image.processing.face.feature.comparison.FaceFVComparator;
 import org.openimaj.image.processing.face.feature.comparison.FacialFeatureComparator;
 import org.openimaj.image.processing.face.recognition.AnnotatorFaceRecogniser;
+import org.openimaj.image.processing.face.recognition.FisherFaceRecogniser;
 import org.openimaj.ml.annotation.basic.KNNAnnotator;
+import org.openimaj.util.pair.IndependentPair;
 
 import javax.swing.*;
 
@@ -90,6 +94,7 @@ public class JavFx {
 
 
     AnnotatorFaceRecogniser<DetectedFace, String> recogniser;
+    FisherFaceRecogniser<DetectedFace,String> fisher_recogniser;
 
 
     volatile FImage test;
@@ -654,11 +659,24 @@ public class JavFx {
                             namesAwt = names;
                             System.out.println(namesAwt);
                         }
+
+                        if(faces != null && method == 3 && fisher_recogniser != null && isSetRec){
+
+                            namesAwt = null;
+                            names = new ArrayList<>();
+
+                            for(DetectedFace face : faces){
+                                names.add(fisher_recogniser.annotateBest(face).annotation);
+                            }
+
+                            namesAwt = names;
+                            System.out.println(namesAwt);
+                        }
                     }
                     // Sleep for a while
                     Thread.sleep(100);
                 } catch (Exception e) {
-                    System.out.println(Thread.currentThread().getName() + "THAT BITCH");
+                    System.out.println(Thread.currentThread().getName() + "THAT BITCH2");
                     e.printStackTrace();
                     return 1;
                 }
@@ -678,14 +696,14 @@ public class JavFx {
             File dir3 = new File("EigenImages/");
             //dir3.mkdir();
 
-            if(method != 2) {dir.mkdir();dir2.mkdir();dir3.mkdir();}
+            if(method == 1) {dir.mkdir();dir2.mkdir();dir3.mkdir();}
 
             if (amnt == 0)
                 amnt = Integer.parseInt(amount.getText());
 
             int nTraining = Math.round(amnt) - 2;
 
-            if(method == 1 || method == 3) {
+            if(method == 1) {
                 try {
                     while (count < amnt) {
                         if (faces != null)
@@ -713,7 +731,7 @@ public class JavFx {
                     System.exit(2);
                 }
 
-                if (!buff.isEmpty() && method == 1)
+                if (!buff.isEmpty())
                     try {
                         features = new HashMap<String, DoubleFV[]>();
                         int nEigenvectors = 1000;
@@ -804,8 +822,7 @@ public class JavFx {
                             }
                             //recogniser.train();
                         } else Thread.sleep(40);
-                        //dataset.put(name.getText(), (ListDataset<DetectedFace>) faces.subList(0, ));
-                        //new AnnotatorFaceRecogniser<DetectedFace, String>().annotate(faces.get(0)).iterator().next().;
+
                         Thread.sleep(100);
                     }
                     dataset.put(name.getText(), new ListBackedDataset<DetectedFace>(lds));
@@ -818,7 +835,41 @@ public class JavFx {
             }
 
             if(method == 3){
+                try {
+                    count = 0;
+                    ArrayList<DetectedFace> lds = new ArrayList<DetectedFace>();
+                    GroupedDataset<String, ListDataset<DetectedFace>, DetectedFace> dataset = new MapBackedDataset<>();
+                    //we have a new set for a new face every time, no need to set it to null
+                    isSetRec = false;
+                    if(fisher_recogniser == null)  fisher_recogniser = FisherFaceRecogniser.create(30, new ScalingAligner<DetectedFace>(columns,rows),1,DoubleFVComparison.EUCLIDEAN);
+                    while (count < amnt) {
+                        if (faces != null) {
+                            if ((lds.size() + faces.size()) <= amnt) {
+                                for (DetectedFace face : faces) {
+                                    System.out.println("Fisher - HERE2");
+                                    lds.add(face);
+                                    count++;
+                                }
+                            } else if (lds.size() < amnt) {
+                                System.out.println("Fisher - HERE3");
+                                Iterator<DetectedFace> it = faces.iterator();
+                                for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
+                                    lds.add(it.next());
+                                    count++;
+                                }
+                            }
+                            //recogniser.train();
+                        } else Thread.sleep(40);
 
+                        Thread.sleep(100);
+                    }
+                    dataset.put(name.getText(), new ListBackedDataset<DetectedFace>(lds)); //adds new face
+                    fisher_recogniser.train(dataset);
+                    isSetRec = true;
+                    System.out.println(lds + "|+_+|\n" + dataset);
+                }catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
 
             return 0;
