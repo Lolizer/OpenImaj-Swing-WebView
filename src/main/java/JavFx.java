@@ -48,8 +48,8 @@ import org.openimaj.image.processing.face.feature.comparison.FaceFVComparator;
 import org.openimaj.image.processing.face.feature.comparison.FacialFeatureComparator;
 import org.openimaj.image.processing.face.recognition.AnnotatorFaceRecogniser;
 import org.openimaj.image.processing.face.recognition.FisherFaceRecogniser;
+import org.openimaj.ml.annotation.ScoredAnnotation;
 import org.openimaj.ml.annotation.basic.KNNAnnotator;
-import org.openimaj.util.pair.IndependentPair;
 
 import javax.swing.*;
 
@@ -144,7 +144,7 @@ public class JavFx {
 
         final JTextArea url = new JTextArea(); //a field for entering an url addresses
 
-        final JButton jButton = new JButton("Button");
+        final JButton jButton = new JButton("Request");
         final JButton jLoad = new JButton("Load");
 
         JMenuBar jmb = new JMenuBar();
@@ -160,7 +160,7 @@ public class JavFx {
         final Checkbox ck = new Checkbox("Draw the facial rectangles within the window");
         final Checkbox eigenCheck = new Checkbox("Eigenfaces recognition");
         final Checkbox AFRCheck = new Checkbox("AnnotatorFaceRecogniser KNN");
-        final Checkbox fisherCheck = new Checkbox("Fisherfaces recognition");
+        final Checkbox fisherCheck = new Checkbox("Fisherfaces recognition + KEFaceDetector");
 
         final JTextField threshold = new JTextField(3);
         threshold.setToolTipText("Threshold for EigenFaces and FisherFaces");
@@ -428,6 +428,13 @@ public class JavFx {
             }
         });
 
+        fisherCheck.addItemListener((e)->{
+            if(fisherCheck.getState() == true)
+            JOptionPane.showMessageDialog(null,
+            "Please make sure you set the amount greater than 20 for this method.\nRecognition won't be working until 3 faces get added to",
+            "Warning", JOptionPane.WARNING_MESSAGE);
+        });
+
         //setting of the component placements and their sizes
         jButton.setSize(new Dimension(200, 27));
         jButton.setLocation(0, 0);
@@ -468,12 +475,12 @@ public class JavFx {
         rec.addActionListener((e) -> {
 
             if(ck.getState() == false || (eigenCheck.getState() == false && AFRCheck.getState() == false && fisherCheck.getState() == false)){
-                JOptionPane.showMessageDialog(null,"You have to first select method and turn detection on!");
+                JOptionPane.showMessageDialog(null,"You have to first select method and turn detection on!","Warning",JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
             name.setText("Name:");
-            amount.setText("Amount:");
+            if(amnt == 0) amount.setText("Amount:");
 
             paramsPane.add(name);
 
@@ -488,8 +495,15 @@ public class JavFx {
 
             if (!checking) paramsPane.add(amount);
 
-            JOptionPane.showMessageDialog(null, paramsPane);
+            JOptionPane.showMessageDialog(null, paramsPane,"Parameters",JOptionPane.PLAIN_MESSAGE);
             if(!name.getText().isEmpty() && !amount.getText().isEmpty() && !name.getText().equals("Name:") && method != 0) {
+                try{
+                    Integer.parseInt(amount.getText());
+                }catch(NumberFormatException nfe){
+                    checking = false;
+                    amount.setText("Amount:");
+                    return;
+                }
                 rc = new Recognition();
                 rc.execute();
             }
@@ -618,75 +632,73 @@ public class JavFx {
                         }
                         ifInside2 = !ifInside2;
                     } else {
-                        synchronized (this) {
-                            if (faces != null && eigen != null && !features.isEmpty() && method == 1) {
-                                int buffInd = eigen.toString().indexOf("dims=");
-                                //if(eigen.getNumComponents() != 0)
-                                if (!eigen.toString().substring(buffInd + 5, buffInd + 6).equals("0")) {
-                                    if (faces != null)
-                                        if (!faces.isEmpty()) {
-                                            //namesAwt = null;
-                                            //System.out.println(eigen.toString().substring(eigen.toString().indexOf("dims=") + 5,eigen.toString().indexOf("dims=") + 6));
-                                            names = new ArrayList<>(); // ВАЖНО! ПРИЧИНО ПО КОТОРОЙ ИМЕН НЕТ ИНОГДА
-                                            for (DetectedFace face : faces) {
-                                                if (face.getConfidence() < 8.0f) continue;
-                                                bufferImageAwt = ImageUtilities.createBufferedImage(face.getFacePatch());
-                                                resAwt = bufferImageAwt.getScaledInstance(columns, rows, Image.SCALE_SMOOTH);
-                                                bufferImage2Awt = new BufferedImage(columns, rows, BufferedImage.TYPE_INT_ARGB);
-                                                resGAwt = bufferImage2Awt.createGraphics();
-                                                resGAwt.drawImage(resAwt, 0, 0, null);
-                                                resGAwt.dispose();
+                        if (faces != null && eigen != null && !features.isEmpty() && method == 1) {
+                            int buffInd = eigen.toString().indexOf("dims=");
+                            //if(eigen.getNumComponents() != 0)
+                            if (!eigen.toString().substring(buffInd + 5, buffInd + 6).equals("0")) {
+                                if (faces != null)
+                                    if (!faces.isEmpty()) {
+                                        //namesAwt = null;
+                                        //System.out.println(eigen.toString().substring(eigen.toString().indexOf("dims=") + 5,eigen.toString().indexOf("dims=") + 6));
+                                        names = new ArrayList<>(); // ВАЖНО! ПРИЧИНО ПО КОТОРОЙ ИМЕН НЕТ ИНОГДА
+                                        for (DetectedFace face : faces) {
+                                            if (face.getConfidence() < 8.0f) continue;
+                                            bufferImageAwt = ImageUtilities.createBufferedImage(face.getFacePatch());
+                                            resAwt = bufferImageAwt.getScaledInstance(columns, rows, Image.SCALE_SMOOTH);
+                                            bufferImage2Awt = new BufferedImage(columns, rows, BufferedImage.TYPE_INT_ARGB);
+                                            resGAwt = bufferImage2Awt.createGraphics();
+                                            resGAwt.drawImage(resAwt, 0, 0, null);
+                                            resGAwt.dispose();
+                                            try {
+                                                test = ImageUtilities.createFImage(bufferImage2Awt);
+                                                //System.out.println(eigen + " END");
+                                                //System.out.println(test.getBounds());
+                                                testFeature = eigen.extractFeature(test);
+                                            } catch (Exception e) {
+                                                System.out.println(Thread.currentThread().getName() + "longprocess");
+                                                e.printStackTrace();
+                                                System.exit(1);
+                                            }
+                                            double minDistance = Double.MAX_VALUE;
+                                            for (String pers : features.keySet()) {
                                                 try {
-                                                    test = ImageUtilities.createFImage(bufferImage2Awt);
-                                                    //System.out.println(eigen + " END");
-                                                    //System.out.println(test.getBounds());
-                                                    testFeature = eigen.extractFeature(test);
+                                                    if (!features.isEmpty()) {
+                                                        //System.out.println(features.get(pers).length + "ENDING HERE BITCH");
+                                                        DoubleFV[] dfv = features.get(pers);
+                                                        //System.out.println(dfv);
+                                                        for (final DoubleFV fv : dfv) {
+                                                            double distance = fv.compare(testFeature, DoubleFVComparison.EUCLIDEAN);
+
+                                                            if (distance < minDistance) {
+                                                                minDistance = distance;
+                                                                bestPerson = pers;
+                                                            }
+                                                        }
+                                                    } else {
+                                                        System.out.println("Features are null");
+                                                    }
                                                 } catch (Exception e) {
-                                                    System.out.println(Thread.currentThread().getName() + "longprocess");
+                                                    System.out.println(Thread.currentThread().getName() + "Longprocess2");
                                                     e.printStackTrace();
                                                     System.exit(1);
                                                 }
-                                                double minDistance = Double.MAX_VALUE;
-                                                for (String pers : features.keySet()) {
-                                                    try {
-                                                        if (!features.isEmpty()) {
-                                                            //System.out.println(features.get(pers).length + "ENDING HERE BITCH");
-                                                            DoubleFV[] dfv = features.get(pers);
-                                                            //System.out.println(dfv);
-                                                            for (final DoubleFV fv : dfv) {
-                                                                double distance = fv.compare(testFeature, DoubleFVComparison.EUCLIDEAN);
-
-                                                                if (distance < minDistance) {
-                                                                    minDistance = distance;
-                                                                    bestPerson = pers;
-                                                                }
-                                                            }
-                                                        } else {
-                                                            System.out.println("Features are null");
-                                                        }
-                                                    } catch (Exception e) {
-                                                        System.out.println(Thread.currentThread().getName() + "Longprocess2");
-                                                        e.printStackTrace();
-                                                        System.exit(1);
-                                                    }
-                                                }
-
-                                                //if (minDistance > maxVecVal * 0.8) names.add("Unknown");
-                                                //else names.add(bestPerson);
-
-                                                if (minDistance > maxVecVal) names.add("Unknown");
-                                                else names.add(bestPerson);
-
-                                                System.out.println(minDistance + " " + bestPerson);
                                             }
-                                            namesAwt = names;
-                                            System.out.println(names);
-                                        }
-                                }
-                            }
 
-                            ifInside2 = !ifInside2;
+                                            //if (minDistance > maxVecVal * 0.8) names.add("Unknown");
+                                            //else names.add(bestPerson);
+
+                                            if (minDistance > maxVecVal) names.add("Unknown");
+                                            else names.add(bestPerson);
+
+                                            System.out.println(minDistance + " " + bestPerson);
+                                        }
+                                        namesAwt = names;
+                                        System.out.println(names);
+                                    }
+                            }
                         }
+
+                        ifInside2 = !ifInside2;
 
                         if(faces != null && method == 2 && recogniser != null && isSetRec){
 
@@ -707,17 +719,21 @@ public class JavFx {
                                 names = new ArrayList<>();
 
                                 for (KEDetectedFace face : kefaces) {
-                                    names.add(fisher_recogniser.annotateBest(face).annotation);
+                                    ScoredAnnotation<String> entry = fisher_recogniser.annotateBest(face);
+                                        names.add(entry.annotation);
+                                        System.out.println("Annotated face: " + entry.annotation + " " + fisher_recogniser.annotateBest(face).confidence);
                                 }
 
                                 namesAwt = names;
-                                System.out.println("NamesAWT = " + namesAwt);
                             }
                         }
 
                         }
                     // Sleep for a while
                     Thread.sleep(100);
+                } catch (RuntimeException re){
+                    re.printStackTrace();
+                    System.exit(3);
                 } catch (Exception e) {
                     System.out.println(Thread.currentThread().getName() + "THAT BITCH2");
                     e.printStackTrace();
@@ -849,13 +865,13 @@ public class JavFx {
                     if(recogniser == null) recogniser = AnnotatorFaceRecogniser.create(knn);
                     while (count < amnt) {
                         if (faces != null) {
-                            if ((lds.size() + faces.size()) <= amnt) {
+                            if ((lds.size() + faces.size()) < amnt + 2) {
                                 for (DetectedFace face : faces) {
                                     System.out.println("HERE2");
                                     lds.add(face);
                                     count++;
                                 }
-                            } else if (lds.size() < amnt) {
+                            } else if (lds.size() < amnt + 2) {
                                 System.out.println("HERE3");
                                 Iterator<DetectedFace> it = faces.iterator();
                                 for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
@@ -879,7 +895,6 @@ public class JavFx {
 
             if(method == 3){
                 try {
-
                     count = 0;
                     ArrayList<KEDetectedFace> lds = new ArrayList<KEDetectedFace>();
                     if(dataset == null) dataset = new MapBackedDataset<>();
@@ -888,13 +903,13 @@ public class JavFx {
                     fisher_recogniser = FisherFaceRecogniser.create(30, new RotateScaleAligner(),1,DoubleFVComparison.EUCLIDEAN);
                     while (count < amnt) {
                         if (kefaces != null) {
-                            if ((lds.size() + kefaces.size()) <= amnt) {
+                            if ((lds.size() + kefaces.size()) < amnt + 2) {
                                 for (KEDetectedFace face : kefaces) {
                                     System.out.println("Fisher - HERE2");
                                     lds.add(face);
                                     count++;
                                 }
-                            } else if (lds.size() < amnt) {
+                            } else if (lds.size() < amnt + 2) {
                                 System.out.println("Fisher - HERE3");
                                 Iterator<KEDetectedFace> it = kefaces.iterator();
                                 for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
