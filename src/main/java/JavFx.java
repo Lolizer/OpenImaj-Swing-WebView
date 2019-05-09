@@ -453,12 +453,24 @@ public class JavFx {
             settingPane.add(fisherCheck);
 
             JOptionPane.showMessageDialog(null, settingPane,"Settings",JOptionPane.OK_OPTION);
-            if(threshold.getText().isEmpty()) {maxVecVal = 21; return;}
-            maxVecVal = Math.round(Double.parseDouble(threshold.getText()));
+            if(threshold.getText().isEmpty() || threshold.getText().equals("Threashold")) {maxVecVal = 20; threshold.setText("" + maxVecVal); return;}
+            //else threshold.setText(threshold.getText());
+            try {
+                maxVecVal = Math.round(Double.parseDouble(threshold.getText()));
+            }catch (NumberFormatException nfe){
+                threshold.setText("20.0");
+                maxVecVal = 20;
+                JOptionPane.showMessageDialog(null,"Threshold was set in the wrong way and so set by default");
+            }
         });
 
         //starts learning operations for previously selected recognition method
         rec.addActionListener((e) -> {
+
+            if(ck.getState() == false || (eigenCheck.getState() == false && AFRCheck.getState() == false && fisherCheck.getState() == false)){
+                JOptionPane.showMessageDialog(null,"You have to first select method and turn detection on!");
+                return;
+            }
 
             name.setText("Name:");
             amount.setText("Amount:");
@@ -899,7 +911,7 @@ public class JavFx {
 
                     for(String entry : dataset.keySet())
                         System.out.println("Faces we have: " + entry + " " + dataset.getInstances(entry));
-                    if(dataset.size() > 1){
+                    if(dataset.size() > 2){
                         fisher_recogniser.train(dataset);
                         isSetRec = true;
                     }
