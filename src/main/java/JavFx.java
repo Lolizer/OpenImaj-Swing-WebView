@@ -36,9 +36,7 @@ import org.openimaj.image.ImageUtilities;
 import org.openimaj.image.MBFImage;
 import org.openimaj.image.colour.Transforms;
 import org.openimaj.image.model.EigenImages;
-import org.openimaj.image.processing.face.alignment.FaceAligner;
-import org.openimaj.image.processing.face.alignment.IdentityAligner;
-import org.openimaj.image.processing.face.alignment.ScalingAligner;
+import org.openimaj.image.processing.face.alignment.*;
 import org.openimaj.image.processing.face.detection.DetectedFace;
 import org.openimaj.image.processing.face.detection.FaceDetector;
 import org.openimaj.image.processing.face.detection.HaarCascadeDetector;
@@ -92,9 +90,11 @@ public class JavFx {
     volatile String bestPerson = null;
     volatile GroupedDataset<String, ListDataset<FImage>, FImage> training;
 
+    GroupedDataset<String, ListDataset<KEDetectedFace>, KEDetectedFace> dataset;
+
 
     AnnotatorFaceRecogniser<DetectedFace, String> recogniser;
-    FisherFaceRecogniser<DetectedFace,String> fisher_recogniser;
+    FisherFaceRecogniser<KEDetectedFace,String> fisher_recogniser;
 
 
     volatile FImage test;
@@ -181,6 +181,33 @@ public class JavFx {
                     int bounderer = 0;
 
                     for (DetectedFace face : faces) {
+                        if (face.getConfidence() < 8.0f) continue;
+                        x = Math.round(face.getBounds().x);
+                        y = Math.round(face.getBounds().y);
+                        buf = "" + face.getConfidence();
+                        width = Math.round(face.getBounds().width);
+                        height = Math.round(face.getBounds().height);
+                        g.drawString(buf, x + 10, y - 10);
+                        g.drawRect(x, y, width, height);
+
+                        thrName = Thread.currentThread().getName();
+
+                        if (namesAwt != null && !thrName.equals("firstWorker") && !thrName.equals("secondWorker")) {
+
+                            if (bounderer < namesAwt.size()) {
+                                if (!namesAwt.get(bounderer).isEmpty()) {
+                                    g.drawString(namesAwt.get(bounderer), x + 40, y - 10);
+                                    bounderer++;
+                                }
+                            }
+                            if (bounderer == namesAwt.size()) bounderer = 0;
+                        }
+                    }
+                }
+                if(kefaces != null){
+                    int bounderer = 0;
+
+                    for (KEDetectedFace face : kefaces) {
                         if (face.getConfidence() < 8.0f) continue;
                         x = Math.round(face.getBounds().x);
                         y = Math.round(face.getBounds().y);
@@ -542,11 +569,13 @@ public class JavFx {
                     if (bi != null && !ifInside == false && flg == true) {
                         mbf[0] = null;
                         faces = null;
-                        //kefaces = null;
+                        kefaces = null;
                         mbf[0] = ImageUtilities.createMBFImage(bi, true);
-                        //kefaces = (ArrayList<KEDetectedFace>) fkefd.detectFaces(Transforms.calculateIntensity(mbf[0]));
-                        faces = (ArrayList<DetectedFace>) fd.detectFaces(Transforms.calculateIntensity(mbf[0]));
-
+                        if(method != 3) {
+                            faces = (ArrayList<DetectedFace>) fd.detectFaces(Transforms.calculateIntensity(mbf[0]));
+                        }else{
+                            kefaces = (ArrayList<KEDetectedFace>) fkefd.detectFaces(Transforms.calculateIntensity(mbf[0]));
+                        }
                         mbf[0] = null;
                         bi = null;
                         flg = !flg;
@@ -660,19 +689,21 @@ public class JavFx {
                             System.out.println(namesAwt);
                         }
 
-                        if(faces != null && method == 3 && fisher_recogniser != null && isSetRec){
+                        if(kefaces != null && method == 3 && fisher_recogniser != null && isSetRec){
+                            if(!kefaces.isEmpty()) {
+                                namesAwt = null;
+                                names = new ArrayList<>();
 
-                            namesAwt = null;
-                            names = new ArrayList<>();
+                                for (KEDetectedFace face : kefaces) {
+                                    names.add(fisher_recogniser.annotateBest(face).annotation);
+                                }
 
-                            for(DetectedFace face : faces){
-                                names.add(fisher_recogniser.annotateBest(face).annotation);
+                                namesAwt = names;
+                                System.out.println("NamesAWT = " + namesAwt);
                             }
-
-                            namesAwt = names;
-                            System.out.println(namesAwt);
                         }
-                    }
+
+                        }
                     // Sleep for a while
                     Thread.sleep(100);
                 } catch (Exception e) {
@@ -836,23 +867,24 @@ public class JavFx {
 
             if(method == 3){
                 try {
+
                     count = 0;
-                    ArrayList<DetectedFace> lds = new ArrayList<DetectedFace>();
-                    GroupedDataset<String, ListDataset<DetectedFace>, DetectedFace> dataset = new MapBackedDataset<>();
-                    //we have a new set for a new face every time, no need to set it to null
+                    ArrayList<KEDetectedFace> lds = new ArrayList<KEDetectedFace>();
+                    if(dataset == null) dataset = new MapBackedDataset<>();
+
                     isSetRec = false;
-                    if(fisher_recogniser == null)  fisher_recogniser = FisherFaceRecogniser.create(30, new ScalingAligner<DetectedFace>(columns,rows),1,DoubleFVComparison.EUCLIDEAN);
+                    fisher_recogniser = FisherFaceRecogniser.create(30, new RotateScaleAligner(),1,DoubleFVComparison.EUCLIDEAN);
                     while (count < amnt) {
-                        if (faces != null) {
-                            if ((lds.size() + faces.size()) <= amnt) {
-                                for (DetectedFace face : faces) {
+                        if (kefaces != null) {
+                            if ((lds.size() + kefaces.size()) <= amnt) {
+                                for (KEDetectedFace face : kefaces) {
                                     System.out.println("Fisher - HERE2");
                                     lds.add(face);
                                     count++;
                                 }
                             } else if (lds.size() < amnt) {
                                 System.out.println("Fisher - HERE3");
-                                Iterator<DetectedFace> it = faces.iterator();
+                                Iterator<KEDetectedFace> it = kefaces.iterator();
                                 for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
                                     lds.add(it.next());
                                     count++;
@@ -863,10 +895,16 @@ public class JavFx {
 
                         Thread.sleep(100);
                     }
-                    dataset.put(name.getText(), new ListBackedDataset<DetectedFace>(lds)); //adds new face
-                    fisher_recogniser.train(dataset);
-                    isSetRec = true;
-                    System.out.println(lds + "|+_+|\n" + dataset);
+                    dataset.put(name.getText(), new ListBackedDataset<KEDetectedFace>(lds)); //adds new face
+
+                    for(String entry : dataset.keySet())
+                        System.out.println("Faces we have: " + entry + " " + dataset.getInstances(entry));
+                    if(dataset.size() > 1){
+                        fisher_recogniser.train(dataset);
+                        isSetRec = true;
+                    }
+                    //System.out.println(lds + "|+_+|\n" + dataset);
+
                 }catch (Exception e) {
                     e.printStackTrace();
                 }
