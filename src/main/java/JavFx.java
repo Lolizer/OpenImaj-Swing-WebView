@@ -14,6 +14,7 @@ import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebEvent;
 import javafx.scene.web.WebView;
 
+import javafx.util.Pair;
 import netscape.javascript.JSObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.http.HttpEntity;
@@ -52,6 +53,7 @@ import org.openimaj.ml.annotation.ScoredAnnotation;
 import org.openimaj.ml.annotation.basic.KNNAnnotator;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
 
@@ -91,6 +93,7 @@ public class JavFx {
     volatile GroupedDataset<String, ListDataset<FImage>, FImage> training;
 
     GroupedDataset<String, ListDataset<KEDetectedFace>, KEDetectedFace> dataset;
+    GroupedDataset<String, ListDataset<DetectedFace>, DetectedFace> KNN_dataset;
 
 
     AnnotatorFaceRecogniser<DetectedFace, String> recogniser;
@@ -108,7 +111,7 @@ public class JavFx {
     MBFImage[] mbf = new MBFImage[]{null, null};
     ArrayList<DetectedFace> faces;
     ArrayList<KEDetectedFace> kefaces; // for FKEFD ↑
-    GraphicsConfiguration gConf = new JWindow().getGraphicsConfiguration();
+    GraphicsConfiguration gConf = new JWindow().getGraphicsConfiguration(); //is used for image creating
     volatile Graphics2D g2D;
     BasicStroke bsk = new BasicStroke(5.0f);
     String buf;
@@ -144,7 +147,7 @@ public class JavFx {
 
         final JTextArea url = new JTextArea(); //a field for entering an url addresses
 
-        final JButton jButton = new JButton("Request");
+        final JButton jButton = new JButton("Dataset");
         final JButton jLoad = new JButton("Load");
 
         JMenuBar jmb = new JMenuBar();
@@ -157,13 +160,13 @@ public class JavFx {
         JPanel settingPane = new JPanel();
         settingPane.setLayout(new BoxLayout(settingPane,BoxLayout.Y_AXIS));
 
-        final Checkbox ck = new Checkbox("Draw the facial rectangles within the window");
+        final Checkbox ck = new Checkbox("Draw the facial rectangles within the window (Haar)");
         final Checkbox eigenCheck = new Checkbox("Eigenfaces recognition");
         final Checkbox AFRCheck = new Checkbox("AnnotatorFaceRecogniser KNN");
         final Checkbox fisherCheck = new Checkbox("Fisherfaces recognition + KEFaceDetector");
 
         final JTextField threshold = new JTextField(3);
-        threshold.setToolTipText("Threshold for EigenFaces and FisherFaces");
+        threshold.setToolTipText("Threshold for EigenFaces");
         threshold.setText("Threashold");
 
         //overriding of paintComponent() method for drawing operations in window
@@ -176,7 +179,7 @@ public class JavFx {
                 g2D = (Graphics2D) g;
                 g2D.setPaint(Color.RED);
                 g2D.setStroke(bsk);
-                if (faces != null) {
+                if (faces != null && ifInside) {
 
                     int bounderer = 0;
 
@@ -307,7 +310,273 @@ public class JavFx {
 
         jButton.addActionListener(e -> { //Execute some JS code by pushing button
             Platform.runLater(() -> {
+                if(!(JOptionPane.showConfirmDialog(null,"Are you sure?","Datasets handling",JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION))
+                    return;
+                if(dataset == null && KNN_dataset == null && training == null) {
+                    JOptionPane.showMessageDialog(null, "Please train any algorithm first!", "Prompt", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if(dataset != null && method == 3)
+                    if(!dataset.isEmpty()) {
+                        frame.setEnabled(false);
+                        JFrame jfr = new JFrame("Method: Fisherfaces + KEFaceDetection");
+                        JLabel info = new JLabel("Training dataset:",SwingConstants.CENTER);
+                        JButton erase = new JButton("Erase dataset");
+                        DefaultTableModel model = new DefaultTableModel(new String[]{"Facial name","Image"},dataset.keySet().size()){
+                            public Class getColumnClass(int column)
+                            {
+                                return getValueAt(0, column).getClass();
+                            }
+                        };
 
+                        Iterator<String> it = dataset.getGroups().iterator();
+                        for (int i = 0; i < dataset.keySet().size(); i++) {
+                            String buff = it.next();
+                            model.setValueAt(buff,i,0);
+                            //model.setValueAt(dataset.getRandomInstance(buff),i,1);
+                            model.setValueAt(new ImageIcon(ImageUtilities.createBufferedImage(dataset.getRandomInstance(buff).getFacePatch())),i,1);
+                        }
+                        JTable table = new JTable(model);
+                        table.setPreferredScrollableViewportSize(table.getPreferredSize());
+                        table.setCellSelectionEnabled(false);
+                        table.setRowHeight(rows);
+                        JScrollPane jsp = new JScrollPane(table);
+                        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+                        erase.addActionListener((e2)->{
+                            dataset = null;
+                            fisherCheck.setState(false);
+                            fisher_recogniser = null;
+                            ck.setState(false);
+                            kefaces = null;
+                            names = null;
+                            namesAwt = null;
+                            model.setRowCount(0);
+                            table.revalidate();
+                            ifInside = false;
+                        });
+
+                        jfr.getContentPane().add(info,BorderLayout.NORTH);
+                        jfr.getContentPane().add(jsp,BorderLayout.CENTER);
+                        jfr.getContentPane().add(erase,BorderLayout.SOUTH);
+
+                        jfr.setSize(400,rows + 200);
+
+                        jfr.addWindowListener(new WindowListener() {
+                            @Override
+                            public void windowOpened(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowClosing(WindowEvent e) {
+                                frame.setEnabled(true);
+                            }
+
+                            @Override
+                            public void windowClosed(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowIconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeiconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowActivated(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeactivated(WindowEvent e) {
+
+                            }
+                        });
+
+                        jfr.setVisible(true);
+                    }
+
+                if(KNN_dataset != null && method == 2)
+                    if(!KNN_dataset.isEmpty()) {
+                        frame.setEnabled(false);
+                        JFrame jfr = new JFrame("Method: KNNAnnotator + HaarFaceDetection");
+                        JLabel info = new JLabel("Training dataset:",SwingConstants.CENTER);
+                        JButton erase = new JButton("Erase dataset");
+                        DefaultTableModel model = new DefaultTableModel(new String[]{"Facial name","Image"},KNN_dataset.keySet().size()){
+                            public Class getColumnClass(int column)
+                            {
+                                return getValueAt(0, column).getClass();
+                            }
+                        };
+
+                        Iterator<String> it = KNN_dataset.getGroups().iterator();
+                        for (int i = 0; i < KNN_dataset.keySet().size(); i++) {
+                            String buff = it.next();
+                            model.setValueAt(buff,i,0);
+                            //model.setValueAt(dataset.getRandomInstance(buff),i,1);
+                            model.setValueAt(new ImageIcon(ImageUtilities.createBufferedImage(KNN_dataset.getRandomInstance(buff).getFacePatch())),i,1);
+                        }
+                        JTable table = new JTable(model);
+                        table.setPreferredScrollableViewportSize(table.getPreferredSize());
+                        table.setCellSelectionEnabled(false);
+                        table.setRowHeight(rows);
+                        JScrollPane jsp = new JScrollPane(table);
+                        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+                        erase.addActionListener((e2)->{
+                            KNN_dataset = null;
+                            AFRCheck.setState(false);
+                            recogniser = null;
+                            ck.setState(false);
+                            faces = null;
+                            names = null;
+                            namesAwt = null;
+                            model.setRowCount(0);
+                            table.revalidate();
+                            ifInside = false;
+                        });
+
+                        jfr.getContentPane().add(info,BorderLayout.NORTH);
+                        jfr.getContentPane().add(jsp,BorderLayout.CENTER);
+                        jfr.getContentPane().add(erase,BorderLayout.SOUTH);
+
+                        jfr.setSize(400,rows + 200);
+
+                        jfr.addWindowListener(new WindowListener() {
+                            @Override
+                            public void windowOpened(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowClosing(WindowEvent e) {
+                                frame.setEnabled(true);
+                            }
+
+                            @Override
+                            public void windowClosed(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowIconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeiconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowActivated(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeactivated(WindowEvent e) {
+
+                            }
+                        });
+
+                        jfr.setVisible(true);
+                    }
+
+                if(training != null && method == 1)
+                    if(!training.isEmpty()) {
+                        frame.setEnabled(false);
+                        JFrame jfr = new JFrame("Eigenfaces + HaarFaceDetection");
+                        JLabel info = new JLabel("Training dataset:",SwingConstants.CENTER);
+                        JButton erase = new JButton("Erase dataset");
+                        DefaultTableModel model = new DefaultTableModel(new String[]{"Facial name","Image"},training.keySet().size()){
+                            public Class getColumnClass(int column)
+                            {
+                                return getValueAt(0, column).getClass();
+                            }
+                        };
+
+                        Iterator<String> it = training.getGroups().iterator();
+                        for (int i = 0; i < training.keySet().size(); i++) {
+                            String buff = it.next();
+                            model.setValueAt(buff,i,0);
+                            //model.setValueAt(dataset.getRandomInstance(buff),i,1);
+                            model.setValueAt(new ImageIcon(ImageUtilities.createBufferedImage(training.getRandomInstance(buff))),i,1);
+                        }
+                        JTable table = new JTable(model);
+                        table.setPreferredScrollableViewportSize(table.getPreferredSize());
+                        table.setCellSelectionEnabled(false);
+                        table.setRowHeight(rows);
+                        JScrollPane jsp = new JScrollPane(table);
+                        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+                        erase.addActionListener((e2)->{
+                            training = null;
+                            eigenCheck.setState(false);
+                            eigen = null;
+                            ck.setState(false);
+                            faces = null;
+                            names = null;
+                            namesAwt = null;
+                            model.setRowCount(0);
+                            table.revalidate();
+                            ifInside = false;
+                        });
+
+                        jfr.getContentPane().add(info,BorderLayout.NORTH);
+                        jfr.getContentPane().add(jsp,BorderLayout.CENTER);
+                        jfr.getContentPane().add(erase,BorderLayout.SOUTH);
+
+                        jfr.setSize(400,rows + 200);
+
+                        jfr.addWindowListener(new WindowListener() {
+                            @Override
+                            public void windowOpened(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowClosing(WindowEvent e) {
+                                frame.setEnabled(true);
+                            }
+
+                            @Override
+                            public void windowClosed(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowIconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeiconified(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowActivated(WindowEvent e) {
+
+                            }
+
+                            @Override
+                            public void windowDeactivated(WindowEvent e) {
+
+                            }
+                        });
+
+                        jfr.setVisible(true);
+                    }
+                /*
                 CloseableHttpClient httpclient = HttpClients.createMinimal();
                 HttpPost request = new HttpPost("http://bit.do/mod_perl/url-shortener.pl");
                 StringBody action = new StringBody("shorten", ContentType.APPLICATION_FORM_URLENCODED);
@@ -718,10 +987,12 @@ public class JavFx {
                                 namesAwt = null;
                                 names = new ArrayList<>();
 
+                                System.out.println();
+
                                 for (KEDetectedFace face : kefaces) {
                                     ScoredAnnotation<String> entry = fisher_recogniser.annotateBest(face);
                                         names.add(entry.annotation);
-                                        System.out.println("Annotated face: " + entry.annotation + " " + fisher_recogniser.annotateBest(face).confidence);
+                                        System.out.print("Annotated face: " + entry.annotation + " ");
                                 }
 
                                 namesAwt = names;
@@ -810,7 +1081,7 @@ public class JavFx {
 
                         for (int i = 0; i < training.getGroups().size(); i++)
                             ImageIO.write(ImageUtilities.createBufferedImage(eigen.visualisePC(i + nTraining - 2)),
-                                    "png", new File(dir3.getAbsolutePath() + "/" + training.getGroups().toArray()[i] + "" + "_eigen.png"));
+                                    "png", new File(dir3.getAbsolutePath() + "/" + /*ordering error*/ training.getGroups().toArray()[i] + "" + "_eigen.png"));
 
                         for (String pers : training.getGroups()) {
                             final DoubleFV[] fvs = new DoubleFV[nTraining];
@@ -857,12 +1128,13 @@ public class JavFx {
                 try {
                     count = 0;
                     ArrayList<DetectedFace> lds = new ArrayList<DetectedFace>();
-                    GroupedDataset<String, ListDataset<DetectedFace>, DetectedFace> dataset = new MapBackedDataset<>();
+                    if(KNN_dataset == null) KNN_dataset = new MapBackedDataset<>();
                     final LocalLBPHistogram.Extractor<DetectedFace> extractor = new LocalLBPHistogram.Extractor<>(new IdentityAligner<DetectedFace>());
                     final FacialFeatureComparator<LocalLBPHistogram> comparator = new FaceFVComparator<LocalLBPHistogram, FloatFV>(FloatFVComparison.EUCLIDEAN);
                     final KNNAnnotator<DetectedFace, String, LocalLBPHistogram> knn = KNNAnnotator.create(extractor, comparator, 1);
                     isSetRec = false;
-                    if(recogniser == null) recogniser = AnnotatorFaceRecogniser.create(knn);
+                    recogniser = null;
+                    recogniser = AnnotatorFaceRecogniser.create(knn);
                     while (count < amnt) {
                         if (faces != null) {
                             if ((lds.size() + faces.size()) < amnt + 2) {
@@ -884,10 +1156,10 @@ public class JavFx {
 
                         Thread.sleep(100);
                     }
-                    dataset.put(name.getText(), new ListBackedDataset<DetectedFace>(lds));
-                    recogniser.train(dataset);
+                    KNN_dataset.put(name.getText(), new ListBackedDataset<DetectedFace>(lds));
+                    recogniser.train(KNN_dataset);
                     isSetRec = true;
-                    System.out.println(lds + "|+_+|\n" + dataset);
+                    System.out.println(lds + "|+_+|\n" + KNN_dataset);
                 }catch (Exception e) {
                     e.printStackTrace();
                 }
