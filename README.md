@@ -8,4 +8,4 @@ First of all, i would like to say that it is my first big project in Java and it
 My program makes images from JavaFx pane with WebEngine inside, it means we can put in any facial set via browser (instead of WebCam realizations) to train realized algorithms.
 I have realized HaarCascadeDetector to detect faces on the frame and several recognizers (EigenFaces,FisherFaces and AnnotatorFaceRecogniser).
 
-<img src="/img/fx.png" width="500"> <img src="/img/fx2.png" width="500"> <img src="/img/fx3.png" width="500">
+<img src="/img/KNN.png" width="300"> <img src="/img/dataset.png" width="300"> <img src="/img/settings.png" width="300">
