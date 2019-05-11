@@ -6,6 +6,6 @@ Information that have been used to perform most of this is here: http://openimaj
 This Java program is my diploma project and implements some computer vision algorithms using OpenImaj library.
 First of all, i would like to say that it is my first big project in Java and it contains some design issues, because i don't have enough practical experience to avoid them all.
 My program makes images from JavaFx pane with WebEngine inside, it means we can put in any facial set via browser (instead of WebCam realizations) to train realized algorithms.
-I have realized HaarCascadeDetector to detect faces on the frame and several recognizers (EigenFaces,FisherFaces and AnnotatorFaceRecogniser).
+I have realized HaarCascadeDetector,KEFaceDetector to detect faces on the frame and several recognizers (EigenFaces,FisherFaces and AnnotatorFaceRecogniser).
 
 <img src="/img/KNN.png" width="300"> <img src="/img/dataset.png" width="300"> <img src="/img/settings.png" width="300">
