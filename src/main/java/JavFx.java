@@ -146,6 +146,7 @@ public class JavFx {
         frame.getContentPane().setLayout(null);
 
         final JTextArea url = new JTextArea(); //a field for entering an url addresses
+        url.setToolTipText("Example: google.com");
 
         final JButton jButton = new JButton("Dataset");
         final JButton jLoad = new JButton("Load");
@@ -350,6 +351,7 @@ public class JavFx {
                             fisher_recogniser = null;
                             ck.setState(false);
                             kefaces = null;
+                            faces = null;
                             names = null;
                             namesAwt = null;
                             model.setRowCount(0);
@@ -670,6 +672,11 @@ public class JavFx {
         eigenCheck.addItemListener(new ItemListener() { //prevents the use of several recognition methods concurrently
             @Override
             public void itemStateChanged(ItemEvent e) {
+                if(!(dataset == null) || !(KNN_dataset == null)) {
+                    JOptionPane.showMessageDialog(null, "You have to erase dataset of current algorithm", "Dataset issue", JOptionPane.WARNING_MESSAGE);
+                    eigenCheck.setState(false);
+                    return;
+                }
                 method = 1;
                 AFRCheck.setState(false);
                 fisherCheck.setState(false);
@@ -680,6 +687,11 @@ public class JavFx {
         AFRCheck.addItemListener(new ItemListener() { //does the same as previous one
             @Override
             public void itemStateChanged(ItemEvent e) {
+                if(!(eigen == null) || !(dataset == null)) {
+                    JOptionPane.showMessageDialog(null, "You have to erase dataset of current algorithm", "Dataset issue", JOptionPane.WARNING_MESSAGE);
+                    AFRCheck.setState(false);
+                    return;
+                }
                 method = 2;
                 eigenCheck.setState(false);
                 fisherCheck.setState(false);
@@ -690,6 +702,11 @@ public class JavFx {
         fisherCheck.addItemListener(new ItemListener() { //does the same as previous one
             @Override
             public void itemStateChanged(ItemEvent e) {
+                if(!(eigen == null) || !(KNN_dataset == null)) {
+                    JOptionPane.showMessageDialog(null, "You have to erase dataset of current algorithm", "Dataset issue", JOptionPane.WARNING_MESSAGE);
+                    fisherCheck.setState(false);
+                    return;
+                }
                 method = 3;
                 eigenCheck.setState(false);
                 AFRCheck.setState(false);
@@ -974,12 +991,16 @@ public class JavFx {
                             namesAwt = null;
                             names = new ArrayList<>();
 
+                            System.out.println();
+
                             for(DetectedFace face : faces){
-                                names.add(recogniser.annotateBest(face).annotation);
+                                ScoredAnnotation<String> entry = recogniser.annotateBest(face);
+                                names.add(entry.annotation);
+                                System.out.print("Annotated face (KNN): " + entry.annotation + " ");
                             }
 
                             namesAwt = names;
-                            System.out.println(namesAwt);
+                            //System.out.println(namesAwt);
                         }
 
                         if(kefaces != null && method == 3 && fisher_recogniser != null && isSetRec){
@@ -992,7 +1013,7 @@ public class JavFx {
                                 for (KEDetectedFace face : kefaces) {
                                     ScoredAnnotation<String> entry = fisher_recogniser.annotateBest(face);
                                         names.add(entry.annotation);
-                                        System.out.print("Annotated face: " + entry.annotation + " ");
+                                        System.out.print("Annotated fisherface: " + entry.annotation + " ");
                                 }
 
                                 namesAwt = names;
@@ -1139,12 +1160,12 @@ public class JavFx {
                         if (faces != null) {
                             if ((lds.size() + faces.size()) < amnt + 2) {
                                 for (DetectedFace face : faces) {
-                                    System.out.println("HERE2");
+                                    System.out.println("KNN - " + count);
                                     lds.add(face);
                                     count++;
                                 }
                             } else if (lds.size() < amnt + 2) {
-                                System.out.println("HERE3");
+                                System.out.println("KNN - " + count);
                                 Iterator<DetectedFace> it = faces.iterator();
                                 for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
                                     lds.add(it.next());
@@ -1177,12 +1198,12 @@ public class JavFx {
                         if (kefaces != null) {
                             if ((lds.size() + kefaces.size()) < amnt + 2) {
                                 for (KEDetectedFace face : kefaces) {
-                                    System.out.println("Fisher - HERE2");
+                                    System.out.println("Fisher - " + count);
                                     lds.add(face);
                                     count++;
                                 }
                             } else if (lds.size() < amnt + 2) {
-                                System.out.println("Fisher - HERE3");
+                                System.out.println("Fisher - " + count);
                                 Iterator<KEDetectedFace> it = kefaces.iterator();
                                 for (int i = 0; (i < amnt - lds.size()) && it.hasNext() && count < amnt; i++) {
                                     lds.add(it.next());
